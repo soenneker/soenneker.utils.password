@@ -1,15 +1,18 @@
 ﻿using Soenneker.Extensions.Enumerable;
 using Soenneker.Extensions.List;
 using Soenneker.Extensions.String;
-using Soenneker.Utils.Password.Abstract;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
 using System.Security.Cryptography;
 
 namespace Soenneker.Utils.Password;
 
-///<inheritdoc cref="IPasswordUtil"/>
-public class PasswordUtil : IPasswordUtil
+/// <summary>
+/// A modern .NET secure password generator.
+/// </summary>
+/// <remarks>All methods are static, no need to register</remarks>
+public class PasswordUtil
 {
     private const string _alphaChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
     private const string _lowerChars = "abcdefghijklmnopqrstuvwxyz";
@@ -17,6 +20,7 @@ public class PasswordUtil : IPasswordUtil
     private const string _numberChars = "1234567890";
     private const string _specialJsonSafe = "!@#$%^*()[]{},.:~_-=";
 
+    [Pure]
     public static string GetSecureCharacters(int length, string characters)
     {
         using (var generator = RandomNumberGenerator.Create())
@@ -25,6 +29,7 @@ public class PasswordUtil : IPasswordUtil
         }
     }
 
+    [Pure]
     public static string GetSecureCharacters(int length, string characters, RandomNumberGenerator generator)
     {
         char[] charArray = characters.ToCharArray();
@@ -40,6 +45,7 @@ public class PasswordUtil : IPasswordUtil
         return secureCharacters;
     }
 
+    [Pure]
     public static string GetUriSafePassword(int length)
     {
         using (var generator = RandomNumberGenerator.Create())
@@ -48,6 +54,7 @@ public class PasswordUtil : IPasswordUtil
         }
     }
 
+    [Pure]
     public static string GetPassword(int length = 12, bool lower = true, bool upper = true, bool number = true, bool special = true)
     {
         if (length <= 0)
