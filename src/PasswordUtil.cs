@@ -1,10 +1,10 @@
 ﻿using Soenneker.Extensions.Enumerable;
 using Soenneker.Extensions.List;
-using Soenneker.Extensions.String;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.Security.Cryptography;
+using Soenneker.Extensions.String;
 
 namespace Soenneker.Utils.Password;
 
@@ -12,7 +12,7 @@ namespace Soenneker.Utils.Password;
 /// A modern .NET secure password generator.
 /// </summary>
 /// <remarks>All methods are static, no need to register</remarks>
-public class PasswordUtil
+public static class PasswordUtil
 {
     private const string _alphaChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
     private const string _lowerChars = "abcdefghijklmnopqrstuvwxyz";
