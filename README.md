@@ -8,5 +8,5 @@
 ## Installation
 
 ```
-Install-Package Soenneker.Utils.Password
+dotnet add package Soenneker.Utils.Password
 ```
