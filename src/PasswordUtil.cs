@@ -20,10 +20,8 @@ public static class PasswordUtil
     [Pure]
     public static string GetSecureCharacters(int length, string characters)
     {
-        using (var generator = RandomNumberGenerator.Create())
-        {
-            return GetSecureCharacters(length, characters, generator);
-        }
+        using var generator = RandomNumberGenerator.Create();
+        return GetSecureCharacters(length, characters, generator);
     }
 
     [Pure]
@@ -47,10 +45,8 @@ public static class PasswordUtil
     [Pure]
     public static string GetUriSafePassword(int length)
     {
-        using (var generator = RandomNumberGenerator.Create())
-        {
-            return GetSecureCharacters(length, _alphaChars, generator);
-        }
+        using var generator = RandomNumberGenerator.Create();
+        return GetSecureCharacters(length, _alphaChars, generator);
     }
 
     [Pure]
