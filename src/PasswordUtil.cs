@@ -1,10 +1,7 @@
-﻿using Soenneker.Extensions.Enumerable;
-using Soenneker.Extensions.List;
-using System;
-using System.Collections.Generic;
+﻿using System;
 using System.Diagnostics.Contracts;
 using System.Security.Cryptography;
-using Soenneker.Extensions.String;
+using System.Text;
 
 namespace Soenneker.Utils.Password;
 
@@ -32,17 +29,19 @@ public static class PasswordUtil
     [Pure]
     public static string GetSecureCharacters(int length, string characters, RandomNumberGenerator generator)
     {
-        char[] charArray = characters.ToCharArray();
+        var result = new StringBuilder(length);
+        int charCount = characters.Length;
+
         var data = new byte[length];
         generator.GetNonZeroBytes(data);
-        var secureCharacters = "";
 
-        foreach (byte num in data)
+        for (var i = 0; i < data.Length; i++)
         {
-            secureCharacters += charArray[(int) num % charArray.Length].ToString();
+            byte num = data[i];
+            result.Append(characters[num % charCount]);
         }
 
-        return secureCharacters;
+        return result.ToString();
     }
 
     [Pure]
@@ -58,65 +57,77 @@ public static class PasswordUtil
     public static string GetPassword(int length = 12, bool lower = true, bool upper = true, bool number = true, bool special = true)
     {
         if (length <= 0)
-            throw new ArgumentException("Password must be greater than 0");
+            throw new ArgumentException("Password length must be greater than 0.");
 
-        var intList = new List<int>();
+        Span<int> intList = stackalloc int[4];
+        int listCount = 0;
 
-        if (lower)
-            intList.Add(0);
+        if (lower) intList[listCount++] = 0;
+        if (upper) intList[listCount++] = 1;
+        if (number) intList[listCount++] = 2;
+        if (special) intList[listCount++] = 3;
 
-        if (upper)
-            intList.Add(1);
+        if (listCount == 0)
+            throw new ArgumentException("At least one character type must be enabled.");
 
-        if (number)
-            intList.Add(2);
+        using var generator = RandomNumberGenerator.Create();
 
-        if (special)
-            intList.Add(3);
+        // Shuffle intList securely
+        SecureShuffle(intList.Slice(0, listCount));
 
-        if (intList.Empty())
-            throw new ArgumentException("Password must contain a type of character");
+        var result = new StringBuilder(length);
+        int remainingLength = length;
 
-        if (intList.Count > 1)
-            intList.SecureShuffle();
-
-        int toExclusive = length - (intList.Count - 1);
-
-        var result = "";
-
-        using (var generator = RandomNumberGenerator.Create())
+        for (int i = 0; i < listCount; i++)
         {
-            for (var index = 0; index < intList.Count; ++index)
+            int charSetIndex = intList[i];
+            int lengthToGenerate = i == listCount - 1
+                ? remainingLength
+                : RandomNumberGenerator.GetInt32(1, remainingLength - (listCount - i - 1) + 1);
+
+            string characters = charSetIndex switch
             {
-                int num = intList[index];
+                0 => _lowerChars,
+                1 => _upperChars,
+                2 => _numberChars,
+                3 => _specialJsonSafe,
+                _ => throw new InvalidOperationException("Invalid character set index.")
+            };
 
-                int lengthToGenerate = index != intList.Count - 1 ? toExclusive <= 1 ? 1 : intList.Count <= 1 ? toExclusive : RandomNumberGenerator.GetInt32(1, toExclusive) : length - result.Length;
-                string? str2 = null;
+            AppendSecureCharacters(result, lengthToGenerate, characters, generator);
 
-                switch (num)
-                {
-                    case 0:
-                        str2 = GetSecureCharacters(lengthToGenerate, _lowerChars, generator);
-                        break;
-                    case 1:
-                        str2 = GetSecureCharacters(lengthToGenerate, _upperChars, generator);
-                        break;
-                    case 2:
-                        str2 = GetSecureCharacters(lengthToGenerate, _numberChars, generator);
-                        break;
-                    case 3:
-                        str2 = GetSecureCharacters(lengthToGenerate, _specialJsonSafe, generator);
-                        break;
-                }
-
-                toExclusive -= lengthToGenerate;
-                result += str2;
-            }
-
-            if (intList.Count == 1)
-                return result;
-
-            return result.SecureShuffle();
+            remainingLength -= lengthToGenerate;
         }
+
+        return SecureShuffle(result.ToString());
+    }
+
+    private static void AppendSecureCharacters(StringBuilder builder, int count, string characters, RandomNumberGenerator generator)
+    {
+        Span<byte> buffer = stackalloc byte[count];
+        generator.GetNonZeroBytes(buffer);
+        int charCount = characters.Length;
+
+        foreach (var b in buffer)
+        {
+            builder.Append(characters[b % charCount]);
+        }
+    }
+
+    private static void SecureShuffle<T>(Span<T> span)
+    {
+        for (int i = span.Length - 1; i > 0; i--)
+        {
+            int j = RandomNumberGenerator.GetInt32(0, i + 1);
+            (span[i], span[j]) = (span[j], span[i]);
+        }
+    }
+
+    private static string SecureShuffle(string input)
+    {
+        Span<char> chars = stackalloc char[input.Length];
+        input.AsSpan().CopyTo(chars);
+        SecureShuffle(chars);
+        return new string(chars);
     }
 }
