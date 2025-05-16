@@ -1,27 +1,51 @@
 ﻿using System;
 using System.Diagnostics.Contracts;
 using System.Security.Cryptography;
+using Soenneker.Extensions.String;
 
 namespace Soenneker.Utils.Password;
 
 /// <summary>
-/// A modern, high-performance .NET secure password generator for URI-safe and complex passwords.
+/// A modern, high-performance .NET utility for generating secure, random, and optionally unambiguous passwords and strings.
 /// </summary>
-/// <remarks>All methods are static and thread-safe. No registration or instantiation required.</remarks>
 public static class PasswordUtil
 {
-    private const string _alphaChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
     private const string _lowerChars = "abcdefghijklmnopqrstuvwxyz";
     private const string _upperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     private const string _numberChars = "1234567890";
     private const string _specialJsonSafe = "!@#$%^*()[]{},.:~_-=";
+    private const string _ambiguousChars = "Il1O0S5Z2B8G6gqCG";
 
     /// <summary>
-    /// Generates a secure random string of the specified length using the provided character set.
+    /// Removes all ambiguous characters from the given character set.
     /// </summary>
-    /// <param name="length">The number of characters in the generated string.</param>
-    /// <param name="characters">The character set to select from.</param>
-    /// <returns>A securely generated random string.</returns>
+    /// <param name="input">The input character set.</param>
+    /// <returns>The character set with ambiguous characters removed.</returns>
+    private static string RemoveAmbiguous(string input)
+    {
+        Span<char> buffer = input.Length <= 256 ? stackalloc char[input.Length] : new char[input.Length];
+        var written = 0;
+
+        // Use a fixed-size bool lookup table for fastest ambiguous char checking
+        Span<bool> isAmbiguous = stackalloc bool[char.MaxValue + 1];
+        foreach (char c in _ambiguousChars)
+            isAmbiguous[c] = true;
+
+        foreach (char c in input)
+        {
+            if (!isAmbiguous[c])
+                buffer[written++] = c;
+        }
+
+        return new string(buffer.Slice(0, written));
+    }
+
+    /// <summary>
+    /// Generates a secure random string using the specified character set.
+    /// </summary>
+    /// <param name="length">The desired length of the result string.</param>
+    /// <param name="characters">The allowed characters to use in the result.</param>
+    /// <returns>A secure random string of the specified length.</returns>
     [Pure]
     public static string GetSecureCharacters(int length, string characters)
     {
@@ -30,21 +54,24 @@ public static class PasswordUtil
     }
 
     /// <summary>
-    /// Generates a secure random string of the specified length using the provided character set and RNG instance.
+    /// Generates a secure random string using the specified character set and RNG.
     /// </summary>
-    /// <param name="length">The number of characters in the generated string.</param>
-    /// <param name="characters">The character set to select from.</param>
-    /// <param name="generator">The <see cref="RandomNumberGenerator"/> to use for entropy.</param>
-    /// <returns>A securely generated random string.</returns>
+    /// <param name="length">The desired length of the result string.</param>
+    /// <param name="characters">The allowed characters to use in the result.</param>
+    /// <param name="generator">An existing random number generator to use.</param>
+    /// <returns>A secure random string of the specified length.</returns>
+    /// <exception cref="ArgumentException">Thrown when the character set is empty.</exception>
     [Pure]
     public static string GetSecureCharacters(int length, string characters, RandomNumberGenerator generator)
     {
         int charCount = characters.Length;
+        if (charCount == 0)
+            throw new ArgumentException("Character set must not be empty.");
+
         Span<byte> buffer = stackalloc byte[length];
         generator.GetBytes(buffer);
 
-        Span<char> result = stackalloc char[length];
-
+        var result = new char[length];
         for (var i = 0; i < length; i++)
         {
             result[i] = characters[buffer[i] % charCount];
@@ -57,85 +84,82 @@ public static class PasswordUtil
     /// Generates a secure, URI-safe password using alphanumeric characters.
     /// </summary>
     /// <param name="length">The length of the password to generate.</param>
-    /// <returns>A randomly generated URI-safe password.</returns>
+    /// <param name="excludeAmbiguous">Whether to exclude ambiguous characters (e.g., 'O', '0', 'l', '1').</param>
+    /// <returns>A randomly generated alphanumeric password string.</returns>
     [Pure]
-    public static string GetUriSafePassword(int length)
+    public static string GetUriSafePassword(int length = 24, bool excludeAmbiguous = false)
     {
-        using var generator = RandomNumberGenerator.Create();
-        return GetSecureCharacters(length, _alphaChars, generator);
+        return GetPassword(length, true, true, true, false, excludeAmbiguous);
     }
 
     /// <summary>
-    /// Generates a secure password with a mix of lower-case, upper-case, numeric, and/or special characters.
+    /// Generates a secure password using a combination of character sets.
     /// </summary>
-    /// <param name="length">The length of the password. Must be greater than 0.</param>
-    /// <param name="lower">Include lowercase characters (a-z).</param>
-    /// <param name="upper">Include uppercase characters (A-Z).</param>
-    /// <param name="number">Include numeric characters (0-9).</param>
-    /// <param name="special">Include JSON-safe special characters (e.g., !@#$%).</param>
-    /// <returns>A securely generated password string.</returns>
-    /// <exception cref="ArgumentException">Thrown if <paramref name="length"/> is less than or equal to 0, or if no character sets are selected.</exception>
+    /// <param name="length">The total length of the password to generate.</param>
+    /// <param name="lower">Include lowercase letters.</param>
+    /// <param name="upper">Include uppercase letters.</param>
+    /// <param name="number">Include numeric digits.</param>
+    /// <param name="special">Include special characters.</param>
+    /// <param name="excludeAmbiguous">Whether to exclude ambiguous characters (e.g., 'O', '0', 'l', '1').</param>
+    /// <returns>A secure password containing a randomized mix of the selected character types.</returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown if the password length is invalid, no character types are selected,
+    /// or ambiguity removal results in an empty character set.
+    /// </exception>
     [Pure]
-    public static string GetPassword(int length = 12, bool lower = true, bool upper = true, bool number = true, bool special = true)
+    public static string GetPassword(int length = 24, bool lower = true, bool upper = true, bool number = true, bool special = true, bool excludeAmbiguous = false)
     {
         if (length <= 0)
             throw new ArgumentException("Password length must be greater than 0.");
 
-        Span<int> intList = stackalloc int[4];
-        var listCount = 0;
+        var charSets = new string?[4];
+        var setCount = 0;
 
-        if (lower)
-            intList[listCount++] = 0;
+        if (lower) charSets[setCount++] = excludeAmbiguous ? RemoveAmbiguous(_lowerChars) : _lowerChars;
+        if (upper) charSets[setCount++] = excludeAmbiguous ? RemoveAmbiguous(_upperChars) : _upperChars;
+        if (number) charSets[setCount++] = excludeAmbiguous ? RemoveAmbiguous(_numberChars) : _numberChars;
+        if (special) charSets[setCount++] = _specialJsonSafe;
 
-        if (upper)
-            intList[listCount++] = 1;
-
-        if (number)
-            intList[listCount++] = 2;
-
-        if (special)
-            intList[listCount++] = 3;
-
-        if (listCount == 0)
+        if (setCount == 0)
             throw new ArgumentException("At least one character type must be enabled.");
+
+        for (var i = 0; i < setCount; i++)
+        {
+            if (charSets[i].IsNullOrEmpty())
+                throw new ArgumentException("Character set became empty after removing ambiguous characters.");
+        }
+
+        if (length < setCount)
+            throw new ArgumentException("Password length must be at least as many as the selected character types to guarantee inclusion.");
 
         using var generator = RandomNumberGenerator.Create();
 
-        SecureShuffle(intList.Slice(0, listCount));
-
-        Span<char> result = stackalloc char[length];
+        var result = new char[length];
         var written = 0;
 
-        for (var i = 0; i < listCount; i++)
+        // Step 1: Guarantee at least one character from each selected set
+        for (var i = 0; i < setCount; i++)
         {
-            int charSetIndex = intList[i];
-            int remaining = length - written;
-            int remainingTypes = listCount - i;
-            int lengthToGenerate = (i == listCount - 1) ? remaining : RandomNumberGenerator.GetInt32(1, remaining - remainingTypes + 2);
-
-            string characters = charSetIndex switch
-            {
-                0 => _lowerChars,
-                1 => _upperChars,
-                2 => _numberChars,
-                3 => _specialJsonSafe,
-                _ => throw new InvalidOperationException("Invalid character set index.")
-            };
-
-            AppendSecureCharacters(result.Slice(written, lengthToGenerate), characters, generator);
-            written += lengthToGenerate;
+            string set = charSets[i]!;
+            result[written++] = set[RandomNumberGenerator.GetInt32(set.Length)];
         }
 
-        SecureShuffle(result);
+        // Step 2: Fill remaining with random characters from the combined set
+        string combined = string.Concat(charSets.AsSpan(0, setCount));
+        AppendSecureCharacters(result.AsSpan(written), combined, generator);
+
+        // Step 3: Shuffle the result
+        SecureShuffle<char>(result);
         return new string(result);
     }
 
+
     /// <summary>
-    /// Appends a sequence of random characters from the provided character set to the destination span.
+    /// Fills a destination span with securely generated random characters from a given character set.
     /// </summary>
-    /// <param name="destination">The span to write the generated characters into.</param>
-    /// <param name="characters">The character set to select from.</param>
-    /// <param name="generator">The <see cref="RandomNumberGenerator"/> to use for entropy.</param>
+    /// <param name="destination">The span to populate with characters.</param>
+    /// <param name="characters">The character set to draw from.</param>
+    /// <param name="generator">An existing random number generator to use.</param>
     private static void AppendSecureCharacters(Span<char> destination, string characters, RandomNumberGenerator generator)
     {
         int charCount = characters.Length;
@@ -149,9 +173,9 @@ public static class PasswordUtil
     }
 
     /// <summary>
-    /// Performs an in-place cryptographically secure shuffle on the provided span.
+    /// Performs an in-place, cryptographically secure shuffle of the elements in a span.
     /// </summary>
-    /// <typeparam name="T">The type of elements in the span.</typeparam>
+    /// <typeparam name="T">The type of the span's elements.</typeparam>
     /// <param name="span">The span to shuffle.</param>
     private static void SecureShuffle<T>(Span<T> span)
     {
