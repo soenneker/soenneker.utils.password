@@ -53,37 +53,47 @@ public static class PasswordUtil
         return GetSecureCharacters(length, characters, generator);
     }
 
-[Pure]
-public static string GetSecureCharacters(int length, string characters, RandomNumberGenerator generator)
-{
-    int charCount = characters.Length;
-    if (charCount == 0)
-        throw new ArgumentException("Character set must not be empty.");
-
-    int maxAcceptable = (256 / charCount) * charCount;
-    var result = new char[length];
-
-    Span<byte> buffer = stackalloc byte[64]; // Small buffer reused
-    int written = 0;
-
-    while (written < length)
+    [Pure]
+    public static string GetSecureCharacters(int length, string characters, RandomNumberGenerator generator)
     {
-        int toRead = Math.Min(buffer.Length, length - written);
-        generator.GetBytes(buffer.Slice(0, toRead * 2)); // extra to account for discards
+        if (characters.IsNullOrEmpty())
+            throw new ArgumentException("Character set must not be empty.", nameof(characters));
 
-        for (int i = 0; i < buffer.Length && written < length; i++)
+        if (length > 1_000_000)
+            throw new ArgumentOutOfRangeException(nameof(length), "Requested length is unreasonably large.");
+
+        int charCount = characters.Length;
+
+        if (charCount == 1)
+            return new string(characters[0], length);
+
+        int maxAcceptable = 256 / charCount * charCount;
+        var result = new char[length];
+
+        Span<byte> buffer = stackalloc byte[64]; // Fixed-size buffer
+        var written = 0;
+
+        while (written < length)
         {
-            byte value = buffer[i];
-            if (value < maxAcceptable)
+            int toFill = Math.Min(length - written, buffer.Length / 2); // how many characters we're trying to write
+            int bytesNeeded = Math.Min(toFill * 2, buffer.Length);      // overfetch, but stay within buffer size
+
+            generator.GetBytes(buffer[..bytesNeeded]);
+
+            for (var i = 0; i < bytesNeeded && written < length; i++)
             {
-                result[written++] = characters[value % charCount];
+                byte value = buffer[i];
+                if (value < maxAcceptable)
+                {
+                    result[written++] = characters[value % charCount];
+                }
             }
         }
-    }
 
-    return new string(result);
-}
-    
+        CryptographicOperations.ZeroMemory(buffer);
+
+        return new string(result);
+    }
 
     /// <summary>
     /// Generates a secure, URI-safe password using alphanumeric characters.
@@ -112,7 +122,8 @@ public static string GetSecureCharacters(int length, string characters, RandomNu
     /// or ambiguity removal results in an empty character set.
     /// </exception>
     [Pure]
-    public static string GetPassword(int length = 24, bool lower = true, bool upper = true, bool number = true, bool special = true, bool excludeAmbiguous = false)
+    public static string GetPassword(int length = 24, bool lower = true, bool upper = true, bool number = true, bool special = true,
+        bool excludeAmbiguous = false)
     {
         if (length <= 0)
             throw new ArgumentException("Password length must be greater than 0.");
@@ -158,35 +169,37 @@ public static string GetSecureCharacters(int length, string characters, RandomNu
         return new string(result);
     }
 
-/// <summary>
-/// Fills a destination span with securely generated random characters from a given character set, avoiding modulo bias.
-/// </summary>
-/// <param name="destination">The span to populate with characters.</param>
-/// <param name="characters">The character set to draw from.</param>
-/// <param name="generator">An existing random number generator to use.</param>
-private static void AppendSecureCharacters(Span<char> destination, string characters, RandomNumberGenerator generator)
-{
-    int charCount = characters.Length;
-    int maxAcceptable = (256 / charCount) * charCount;
-
-    Span<byte> buffer = stackalloc byte[64]; // Tune size for performance/memory
-
-    int written = 0;
-    while (written < destination.Length)
+    /// <summary>
+    /// Fills a destination span with securely generated random characters from a given character set, avoiding modulo bias.
+    /// </summary>
+    /// <param name="destination">The span to populate with characters.</param>
+    /// <param name="characters">The character set to draw from.</param>
+    /// <param name="generator">An existing random number generator to use.</param>
+    private static void AppendSecureCharacters(Span<char> destination, string characters, RandomNumberGenerator generator)
     {
-        int remaining = destination.Length - written;
-        generator.GetBytes(buffer);
+        int charCount = characters.Length;
 
-        for (int i = 0; i < buffer.Length && written < destination.Length; i++)
+        int maxAcceptable = 256 / charCount * charCount;
+
+        Span<byte> buffer = stackalloc byte[64]; // Tune size for performance/memory
+
+        var written = 0;
+        while (written < destination.Length)
         {
-            byte b = buffer[i];
-            if (b < maxAcceptable)
+            generator.GetBytes(buffer);
+
+            for (var i = 0; i < buffer.Length && written < destination.Length; i++)
             {
-                destination[written++] = characters[b % charCount];
+                byte b = buffer[i];
+                if (b < maxAcceptable)
+                {
+                    destination[written++] = characters[b % charCount];
+                }
             }
         }
+
+        CryptographicOperations.ZeroMemory(buffer);
     }
-}
 
     /// <summary>
     /// Performs an in-place, cryptographically secure shuffle of the elements in a span.
