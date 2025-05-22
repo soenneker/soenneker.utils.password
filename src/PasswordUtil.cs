@@ -53,32 +53,37 @@ public static class PasswordUtil
         return GetSecureCharacters(length, characters, generator);
     }
 
-    /// <summary>
-    /// Generates a secure random string using the specified character set and RNG.
-    /// </summary>
-    /// <param name="length">The desired length of the result string.</param>
-    /// <param name="characters">The allowed characters to use in the result.</param>
-    /// <param name="generator">An existing random number generator to use.</param>
-    /// <returns>A secure random string of the specified length.</returns>
-    /// <exception cref="ArgumentException">Thrown when the character set is empty.</exception>
-    [Pure]
-    public static string GetSecureCharacters(int length, string characters, RandomNumberGenerator generator)
+[Pure]
+public static string GetSecureCharacters(int length, string characters, RandomNumberGenerator generator)
+{
+    int charCount = characters.Length;
+    if (charCount == 0)
+        throw new ArgumentException("Character set must not be empty.");
+
+    int maxAcceptable = (256 / charCount) * charCount;
+    var result = new char[length];
+
+    Span<byte> buffer = stackalloc byte[64]; // Small buffer reused
+    int written = 0;
+
+    while (written < length)
     {
-        int charCount = characters.Length;
-        if (charCount == 0)
-            throw new ArgumentException("Character set must not be empty.");
+        int toRead = Math.Min(buffer.Length, length - written);
+        generator.GetBytes(buffer.Slice(0, toRead * 2)); // extra to account for discards
 
-        Span<byte> buffer = stackalloc byte[length];
-        generator.GetBytes(buffer);
-
-        var result = new char[length];
-        for (var i = 0; i < length; i++)
+        for (int i = 0; i < buffer.Length && written < length; i++)
         {
-            result[i] = characters[buffer[i] % charCount];
+            byte value = buffer[i];
+            if (value < maxAcceptable)
+            {
+                result[written++] = characters[value % charCount];
+            }
         }
-
-        return new string(result);
     }
+
+    return new string(result);
+}
+    
 
     /// <summary>
     /// Generates a secure, URI-safe password using alphanumeric characters.
@@ -153,24 +158,35 @@ public static class PasswordUtil
         return new string(result);
     }
 
+/// <summary>
+/// Fills a destination span with securely generated random characters from a given character set, avoiding modulo bias.
+/// </summary>
+/// <param name="destination">The span to populate with characters.</param>
+/// <param name="characters">The character set to draw from.</param>
+/// <param name="generator">An existing random number generator to use.</param>
+private static void AppendSecureCharacters(Span<char> destination, string characters, RandomNumberGenerator generator)
+{
+    int charCount = characters.Length;
+    int maxAcceptable = (256 / charCount) * charCount;
 
-    /// <summary>
-    /// Fills a destination span with securely generated random characters from a given character set.
-    /// </summary>
-    /// <param name="destination">The span to populate with characters.</param>
-    /// <param name="characters">The character set to draw from.</param>
-    /// <param name="generator">An existing random number generator to use.</param>
-    private static void AppendSecureCharacters(Span<char> destination, string characters, RandomNumberGenerator generator)
+    Span<byte> buffer = stackalloc byte[64]; // Tune size for performance/memory
+
+    int written = 0;
+    while (written < destination.Length)
     {
-        int charCount = characters.Length;
-        Span<byte> buffer = stackalloc byte[destination.Length];
+        int remaining = destination.Length - written;
         generator.GetBytes(buffer);
 
-        for (var i = 0; i < buffer.Length; i++)
+        for (int i = 0; i < buffer.Length && written < destination.Length; i++)
         {
-            destination[i] = characters[buffer[i] % charCount];
+            byte b = buffer[i];
+            if (b < maxAcceptable)
+            {
+                destination[written++] = characters[b % charCount];
+            }
         }
     }
+}
 
     /// <summary>
     /// Performs an in-place, cryptographically secure shuffle of the elements in a span.
