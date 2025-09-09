@@ -100,9 +100,12 @@ public static class PasswordUtil
 
         if (setCount == 0)
             throw new ArgumentException("At least one character type must be enabled.");
+        
         for (var i = 0; i < setCount; i++)
-            if (string.IsNullOrEmpty(sets[i]))
+        {
+            if (sets[i].IsNullOrEmpty())
                 throw new ArgumentException("Character set became empty after removing ambiguous characters.");
+        }
 
         if (length < setCount)
             throw new ArgumentException("Password length must be at least the number of selected character types to guarantee inclusion.");
@@ -150,8 +153,10 @@ public static class PasswordUtil
     private static void FillWithSecureCharacters(Span<char> destination, ReadOnlySpan<char> characters, RandomNumberGenerator rng)
     {
         int charCount = characters.Length;
+
         if (charCount == 0)
             throw new ArgumentException("Character set must not be empty.", nameof(characters));
+
         if (charCount == 1)
         {
             destination.Fill(characters[0]);
