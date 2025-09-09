@@ -125,7 +125,7 @@ public class PasswordUtilTests : UnitTest
     [Fact]
     public void GetPassword_should_exclude_ambiguous_when_requested()
     {
-        string password = PasswordUtil.GetPassword(64, lower: true, upper: true, number: true, special: false, excludeAmbiguous: true);
+        string password = PasswordUtil.GetPassword(64, includeLowers: true, includeUppers: true, includeNumbers: true, includeSpecials: false, excludeAmbiguous: true);
         password.Should().NotContainAny("Il1O0S5Z2B8G6gqCG");
     }
 
@@ -158,7 +158,7 @@ public class PasswordUtilTests : UnitTest
     [InlineData(8192)]
     public void GetPassword_should_generate_random_password_of_correct_length(int length)
     {
-        string password = PasswordUtil.GetPassword(length, lower: true, upper: true, number: true, special: true, excludeAmbiguous: true);
+        string password = PasswordUtil.GetPassword(length, includeLowers: true, includeUppers: true, includeNumbers: true, includeSpecials: true, excludeAmbiguous: true);
 
         password.Should().NotBeNullOrWhiteSpace();
         password.Length.Should().Be(length);

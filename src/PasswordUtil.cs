@@ -84,7 +84,8 @@ public static class PasswordUtil
     /// Guarantees inclusion of at least one character from each selected set, then shuffles.
     /// </summary>
     [Pure]
-    public static string GetPassword(int length = 24, bool lower = true, bool upper = true, bool number = true, bool special = true, bool excludeAmbiguous = false)
+    public static string GetPassword(int length = 24, bool includeLowers = true, bool includeUppers = true, bool includeNumbers = true,
+        bool includeSpecials = true, bool excludeAmbiguous = false)
     {
         if (length <= 0)
             throw new ArgumentException("Password length must be greater than 0.", nameof(length));
@@ -93,14 +94,14 @@ public static class PasswordUtil
         var sets = new string?[4];
         var setCount = 0;
 
-        if (lower) sets[setCount++] = excludeAmbiguous ? RemoveAmbiguous(_lowerChars) : _lowerChars;
-        if (upper) sets[setCount++] = excludeAmbiguous ? RemoveAmbiguous(_upperChars) : _upperChars;
-        if (number) sets[setCount++] = excludeAmbiguous ? RemoveAmbiguous(_numberChars) : _numberChars;
-        if (special) sets[setCount++] = _specialJsonSafe;
+        if (includeLowers) sets[setCount++] = excludeAmbiguous ? RemoveAmbiguous(_lowerChars) : _lowerChars;
+        if (includeUppers) sets[setCount++] = excludeAmbiguous ? RemoveAmbiguous(_upperChars) : _upperChars;
+        if (includeNumbers) sets[setCount++] = excludeAmbiguous ? RemoveAmbiguous(_numberChars) : _numberChars;
+        if (includeSpecials) sets[setCount++] = _specialJsonSafe;
 
         if (setCount == 0)
             throw new ArgumentException("At least one character type must be enabled.");
-        
+
         for (var i = 0; i < setCount; i++)
         {
             if (sets[i].IsNullOrEmpty())
