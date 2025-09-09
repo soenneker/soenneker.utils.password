@@ -3,7 +3,6 @@ using Soenneker.Tests.Unit;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
 using Xunit;
 
 namespace Soenneker.Utils.Password.Tests;
@@ -93,7 +92,7 @@ public class PasswordUtilTests : UnitTest
     public void GetPassword_should_throw_if_too_short_for_sets()
     {
         Action act = () => PasswordUtil.GetPassword(2, true, true, true, false);
-        act.Should().Throw<ArgumentException>().WithMessage("*at least as many as the selected character types*");
+        act.Should().Throw<ArgumentException>().WithMessage("Password length must be at least the number of selected character types to guarantee inclusion.");
     }
 
     [Fact]
