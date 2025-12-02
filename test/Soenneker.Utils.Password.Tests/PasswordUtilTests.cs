@@ -18,7 +18,7 @@ public class PasswordUtilTests : UnitTest
     [Fact]
     public void GetUriSafePassword_should_return_string_of_same_length()
     {
-        string result = PasswordUtil.GetUriSafePassword(20);
+        string result = PasswordUtil.GetUriSafePasswordString(20);
 
         result.Should().NotBeNullOrEmpty();
         result.Length.Should().Be(20);
@@ -27,7 +27,7 @@ public class PasswordUtilTests : UnitTest
     [Fact]
     public void GetPassword_should_return_password_with_default_length()
     {
-        string result = PasswordUtil.GetPassword();
+        string result = PasswordUtil.GetPasswordString();
         result.Should().NotBeNullOrEmpty();
         result.Length.Should().Be(24);
     }
@@ -35,7 +35,7 @@ public class PasswordUtilTests : UnitTest
     [Fact]
     public void GetPassword_with_ambiguous_should_give_expected_length()
     {
-        string result = PasswordUtil.GetPassword(excludeAmbiguous: true);
+        string result = PasswordUtil.GetPasswordString(excludeAmbiguous: true);
         result.Should().NotBeNullOrEmpty();
         result.Length.Should().Be(24);
     }
@@ -43,7 +43,7 @@ public class PasswordUtilTests : UnitTest
     [Fact]
     public void GetUriSafePassword_should_not_be_null()
     {
-        string result = PasswordUtil.GetUriSafePassword(excludeAmbiguous: true);
+        string result = PasswordUtil.GetUriSafePasswordString(excludeAmbiguous: true);
         result.Should().NotBeNullOrEmpty();
         result.Length.Should().Be(24);
     }
@@ -51,7 +51,7 @@ public class PasswordUtilTests : UnitTest
     [Fact]
     public void GetUriSafePassword_should_generate_expected_length()
     {
-        string password = PasswordUtil.GetUriSafePassword(32);
+        string password = PasswordUtil.GetUriSafePasswordString(32);
         password.Should().NotBeNullOrWhiteSpace();
         password.Length.Should().Be(32);
         password.All(c => char.IsLetterOrDigit(c)).Should().BeTrue();
@@ -60,7 +60,7 @@ public class PasswordUtilTests : UnitTest
     [Fact]
     public void GetUriSafePassword_should_exclude_ambiguous_when_requested()
     {
-        string password = PasswordUtil.GetUriSafePassword(64, excludeAmbiguous: true);
+        string password = PasswordUtil.GetUriSafePasswordString(64, excludeAmbiguous: true);
         password.Should().NotBeNullOrWhiteSpace();
         password.Should().NotContainAny("Il1O0S5Z2B8G6gqCG");
     }
@@ -72,7 +72,7 @@ public class PasswordUtilTests : UnitTest
     [InlineData(10, false, false, false, true)]
     public void GetPassword_should_include_required_char_types(int length, bool lower, bool upper, bool number, bool special)
     {
-        string password = PasswordUtil.GetPassword(length, lower, upper, number, special);
+        string password = PasswordUtil.GetPasswordString(length, lower, upper, number, special);
         password.Length.Should().Be(length);
 
         if (lower) password.Any(char.IsLower).Should().BeTrue();
@@ -84,14 +84,14 @@ public class PasswordUtilTests : UnitTest
     [Fact]
     public void GetPassword_should_throw_if_all_sets_disabled()
     {
-        Action act = () => PasswordUtil.GetPassword(10, false, false, false, false);
+        Action act = () => PasswordUtil.GetPasswordString(10, false, false, false, false);
         act.Should().Throw<ArgumentException>().WithMessage("*At least one character type*");
     }
 
     [Fact]
     public void GetPassword_should_throw_if_too_short_for_sets()
     {
-        Action act = () => PasswordUtil.GetPassword(2, true, true, true, false);
+        Action act = () => PasswordUtil.GetPasswordString(2, true, true, true, false);
         act.Should().Throw<ArgumentException>().WithMessage("Password length must be at least the number of selected character types to guarantee inclusion.");
     }
 
@@ -112,20 +112,9 @@ public class PasswordUtilTests : UnitTest
     }
 
     [Fact]
-    public void RemoveAmbiguous_should_remove_all_ambiguous_chars()
-    {
-        var input = "ABCDEFGIl1O0S5Z2B8G6gqCG";
-        var cleaned = typeof(PasswordUtil)
-                      .GetMethod("RemoveAmbiguous", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
-                      .Invoke(null, new object[] { input }) as string;
-
-        cleaned.Should().NotContainAny("Il1O0S5Z2B8G6gqCG");
-    }
-
-    [Fact]
     public void GetPassword_should_exclude_ambiguous_when_requested()
     {
-        string password = PasswordUtil.GetPassword(64, includeLowers: true, includeUppers: true, includeNumbers: true, includeSpecials: false, excludeAmbiguous: true);
+        string password = PasswordUtil.GetPasswordString(64, includeLowers: true, includeUppers: true, includeNumbers: true, includeSpecials: false, excludeAmbiguous: true);
         password.Should().NotContainAny("Il1O0S5Z2B8G6gqCG");
     }
 
@@ -133,7 +122,7 @@ public class PasswordUtilTests : UnitTest
     public void Generated_passwords_should_be_random()
     {
         List<string> passwords = Enumerable.Range(0, 10)
-                                           .Select(_ => PasswordUtil.GetPassword(32))
+                                           .Select(_ => PasswordUtil.GetPasswordString(32))
                                            .ToList();
 
         passwords.Distinct().Count().Should().BeGreaterThan(1);
@@ -158,7 +147,7 @@ public class PasswordUtilTests : UnitTest
     [InlineData(8192)]
     public void GetPassword_should_generate_random_password_of_correct_length(int length)
     {
-        string password = PasswordUtil.GetPassword(length, includeLowers: true, includeUppers: true, includeNumbers: true, includeSpecials: true, excludeAmbiguous: true);
+        string password = PasswordUtil.GetPasswordString(length, includeLowers: true, includeUppers: true, includeNumbers: true, includeSpecials: true, excludeAmbiguous: true);
 
         password.Should().NotBeNullOrWhiteSpace();
         password.Length.Should().Be(length);

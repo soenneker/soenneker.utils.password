@@ -2,7 +2,9 @@
 using System.Diagnostics.Contracts;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
-using Soenneker.Extensions.String;
+using Soenneker.Extensions.Spans.Chars;
+using Soenneker.Extensions.Spans.Generics;
+using Soenneker.Extensions.Spans.Bytes;
 
 namespace Soenneker.Utils.Password;
 
@@ -11,39 +13,28 @@ namespace Soenneker.Utils.Password;
 /// </summary>
 public static class PasswordUtil
 {
-    private const string _lowerChars = "abcdefghijklmnopqrstuvwxyz";
-    private const string _upperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    private const string _numberChars = "1234567890";
-    private const string _specialJsonSafe = "!@#$%^*()[]{},.:~_-=";
-    private const string _ambiguousChars = "Il1O0S5Z2B8G6gqCG";
+    private static ReadOnlySpan<char> LowerChars => "abcdefghijklmnopqrstuvwxyz";
+    private static ReadOnlySpan<char> UpperChars => "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private static ReadOnlySpan<char> NumberChars => "1234567890";
+    private static ReadOnlySpan<char> SpecialJsonSafe => "!@#$%^*()[]{},.:~_-=";
+    private static ReadOnlySpan<char> AmbiguousChars => "Il1O0S5Z2B8G6gqCG";
 
     // Cache an ambiguity lookup once, rather than rebuilding per call.
     private static readonly bool[] _ambiguousMap = BuildAmbiguousMap();
 
+    private const int _stackAllocLength = 256;
+    private const int _rngByteBufferSize = 128;
+
     private static bool[] BuildAmbiguousMap()
     {
         var map = new bool[char.MaxValue + 1];
-        foreach (char c in _ambiguousChars)
-            map[c] = true;
-        return map;
-    }
 
-    /// <summary>Removes all ambiguous characters from the given character set.</summary>
-    private static string RemoveAmbiguous(string input)
-    {
-        if (input.Length == 0)
-            return string.Empty;
-
-        Span<char> buffer = input.Length <= 256 ? stackalloc char[input.Length] : new char[input.Length];
-        var written = 0;
-
-        foreach (char c in input)
+        foreach (char c in AmbiguousChars)
         {
-            if (!_ambiguousMap[c])
-                buffer[written++] = c;
+            map[c] = true;
         }
 
-        return new string(buffer[..written]);
+        return map;
     }
 
     /// <summary>Generates a secure random string using the specified character set.</summary>
@@ -54,97 +45,219 @@ public static class PasswordUtil
         return GetSecureCharacters(length, characters, generator);
     }
 
-    /// <summary>Generates a secure random string using the specified character set and RNG.</summary>
+    /// <summary>
+    /// Generates a secure random string using the specified character set.
+    /// </summary>
+    /// <remarks>
+    /// This allocates a managed <see cref="string"/>, which cannot be securely cleared.
+    /// For sensitive secrets (passwords, keys), prefer <see cref="GetPassword"/> with a caller-owned <see cref="Span{Char}"/>.
+    /// </remarks>
     [Pure]
     public static string GetSecureCharacters(int length, string characters, RandomNumberGenerator generator)
     {
-        if (characters.IsNullOrEmpty())
+        return GetSecureCharacters(length, characters.AsSpan(), generator);
+    }
+
+    /// <summary>
+    /// Generates a secure random string using the specified character set.
+    /// </summary>
+    /// <remarks>
+    /// This allocates a managed <see cref="string"/>, which cannot be securely cleared.
+    /// For sensitive secrets (passwords, keys), prefer <see cref="GetPassword"/> with a caller-owned <see cref="Span{Char}"/>.
+    /// </remarks>
+    [Pure]
+    public static string GetSecureCharacters(int length, ReadOnlySpan<char> characters, RandomNumberGenerator generator)
+    {
+        if (characters.IsEmpty)
             throw new ArgumentException("Character set must not be empty.", nameof(characters));
+
         if (length < 0)
             throw new ArgumentOutOfRangeException(nameof(length));
+
         if (length > 1_000_000)
             throw new ArgumentOutOfRangeException(nameof(length), "Requested length is unreasonably large.");
 
-        ReadOnlySpan<char> chars = characters.AsSpan();
-        var result = new char[length];
+        Span<char> buffer = length <= _stackAllocLength ? stackalloc char[length] : new char[length];
 
-        FillWithSecureCharacters(result.AsSpan(), chars, generator);
-        return new string(result);
+        FillWithSecureCharacters(buffer, characters, generator);
+
+        var result = new string(buffer);
+
+        if (length > _stackAllocLength)
+            buffer.SecureZero();
+
+        return result;
     }
 
     /// <summary>Generates a secure, URI-safe password using alphanumeric characters.</summary>
+    /// <remarks>You should use GetUriSafePassword() if possible</remarks>
     [Pure]
-    public static string GetUriSafePassword(int length = 24, bool excludeAmbiguous = false)
+    public static string GetUriSafePasswordString(int length = 24, bool excludeAmbiguous = false)
     {
-        return GetPassword(length, true, true, true, false, excludeAmbiguous);
+        return GetPasswordString(length, true, true, true, false, excludeAmbiguous);
+    }
+
+    public static void GetUriSafePassword(Span<char> destination, bool excludeAmbiguous = false)
+    {
+        GetPassword(destination, true, true, true, false, excludeAmbiguous);
     }
 
     /// <summary>
     /// Generates a secure password using a combination of character sets.
     /// Guarantees inclusion of at least one character from each selected set, then shuffles.
     /// </summary>
+    /// <remarks>You should use GetPassword() if possible</remarks>
     [Pure]
-    public static string GetPassword(int length = 24, bool includeLowers = true, bool includeUppers = true, bool includeNumbers = true,
+    public static string GetPasswordString(int length = 24, bool includeLowers = true, bool includeUppers = true, bool includeNumbers = true,
         bool includeSpecials = true, bool excludeAmbiguous = false)
     {
+        Span<char> buffer = length <= _stackAllocLength ? stackalloc char[length] : new char[length];
+
+        GetPassword(buffer, includeLowers, includeUppers, includeNumbers, includeSpecials, excludeAmbiguous);
+
+        var result = new string(buffer);
+
+        buffer.SecureZero();
+
+        return result;
+    }
+
+    /// <summary>
+    /// Generates a secure password using a combination of character sets.
+    /// Guarantees inclusion of at least one character from each selected set, then shuffles.
+    /// </summary>
+    public static void GetPassword(Span<char> destination, bool includeLowers = true, bool includeUppers = true, bool includeNumbers = true,
+        bool includeSpecials = true, bool excludeAmbiguous = false)
+    {
+        int length = destination.Length;
+
         if (length <= 0)
             throw new ArgumentException("Password length must be greater than 0.", nameof(length));
 
-        // Use a tiny array of strings (OK on heap, negligible). Avoid Span<ReadOnlySpan<char>> (illegal).
-        var sets = new string?[4];
-        var setCount = 0;
+        // Allocate buffers for filtered character sets (only needed for ambiguous filtering)
+        Span<char> lowerBuffer = stackalloc char[LowerChars.Length];
+        Span<char> upperBuffer = stackalloc char[UpperChars.Length];
+        Span<char> numberBuffer = stackalloc char[NumberChars.Length];
 
-        if (includeLowers) sets[setCount++] = excludeAmbiguous ? RemoveAmbiguous(_lowerChars) : _lowerChars;
-        if (includeUppers) sets[setCount++] = excludeAmbiguous ? RemoveAmbiguous(_upperChars) : _upperChars;
-        if (includeNumbers) sets[setCount++] = excludeAmbiguous ? RemoveAmbiguous(_numberChars) : _numberChars;
-        if (includeSpecials) sets[setCount++] = _specialJsonSafe;
+        // Get the character sets as spans
+        ReadOnlySpan<char> lowerSet = includeLowers ? GetFilteredSet(LowerChars, excludeAmbiguous, lowerBuffer) : ReadOnlySpan<char>.Empty;
+        ReadOnlySpan<char> upperSet = includeUppers ? GetFilteredSet(UpperChars, excludeAmbiguous, upperBuffer) : ReadOnlySpan<char>.Empty;
+        ReadOnlySpan<char> numberSet = includeNumbers ? GetFilteredSet(NumberChars, excludeAmbiguous, numberBuffer) : ReadOnlySpan<char>.Empty;
+
+        ReadOnlySpan<char> specialSet = includeSpecials ? SpecialJsonSafe : ReadOnlySpan<char>.Empty;
+
+        // Count active sets and validate
+        var setCount = 0;
+        if (!lowerSet.IsEmpty)
+            setCount++;
+
+        if (!upperSet.IsEmpty)
+            setCount++;
+
+        if (!numberSet.IsEmpty)
+            setCount++;
+
+        if (!specialSet.IsEmpty)
+            setCount++;
 
         if (setCount == 0)
             throw new ArgumentException("At least one character type must be enabled.");
 
-        for (var i = 0; i < setCount; i++)
-        {
-            if (sets[i].IsNullOrEmpty())
-                throw new ArgumentException("Character set became empty after removing ambiguous characters.");
-        }
+        // Validate sets are not empty (if included, they must have characters after filtering)
+        if (includeLowers && lowerSet.IsEmpty)
+            throw new ArgumentException("Character set became empty after removing ambiguous characters.");
+
+        if (includeUppers && upperSet.IsEmpty)
+            throw new ArgumentException("Character set became empty after removing ambiguous characters.");
+
+        if (includeNumbers && numberSet.IsEmpty)
+            throw new ArgumentException("Character set became empty after removing ambiguous characters.");
+
+        if (includeSpecials && specialSet.IsEmpty)
+            throw new ArgumentException("Character set became empty after removing ambiguous characters.");
 
         if (length < setCount)
             throw new ArgumentException("Password length must be at least the number of selected character types to guarantee inclusion.");
 
-        using var rng = RandomNumberGenerator.Create();
-
-        var result = new char[length];
         var written = 0;
 
         // Step 1: guarantee one from each set
-        for (var i = 0; i < setCount; i++)
+        if (!lowerSet.IsEmpty)
         {
-            string set = sets[i]!;
-            int idx = GetInt32(rng, set.Length);
-            result[written++] = set[idx];
+            int idx = RandomNumberGenerator.GetInt32(lowerSet.Length);
+            destination[written++] = lowerSet[idx];
         }
 
-        // Step 2: build a combined alphabet without allocating a managed string
+        if (!upperSet.IsEmpty)
+        {
+            int idx = RandomNumberGenerator.GetInt32(upperSet.Length);
+            destination[written++] = upperSet[idx];
+        }
+
+        if (!numberSet.IsEmpty)
+        {
+            int idx = RandomNumberGenerator.GetInt32(numberSet.Length);
+            destination[written++] = numberSet[idx];
+        }
+
+        if (!specialSet.IsEmpty)
+        {
+            int idx = RandomNumberGenerator.GetInt32(specialSet.Length);
+            destination[written++] = specialSet[idx];
+        }
+
+        // Step 2: build a combined alphabet
         var combinedLen = 0;
-        for (var i = 0; i < setCount; i++)
-            combinedLen += sets[i]!.Length;
 
-        Span<char> combined = combinedLen <= 128 ? stackalloc char[combinedLen] : new char[combinedLen];
+        if (!lowerSet.IsEmpty)
+            combinedLen += lowerSet.Length;
+
+        if (!upperSet.IsEmpty)
+            combinedLen += upperSet.Length;
+
+        if (!numberSet.IsEmpty)
+            combinedLen += numberSet.Length;
+
+        if (!specialSet.IsEmpty)
+            combinedLen += specialSet.Length;
+
+        Span<char> combined = combinedLen <= _stackAllocLength ? stackalloc char[combinedLen] : new char[combinedLen];
+
         var pos = 0;
-        for (var i = 0; i < setCount; i++)
+
+        if (!lowerSet.IsEmpty)
         {
-            string s = sets[i]!;
-            s.AsSpan().CopyTo(combined.Slice(pos, s.Length));
-            pos += s.Length;
+            lowerSet.CopyTo(combined.Slice(pos, lowerSet.Length));
+            pos += lowerSet.Length;
         }
+
+        if (!upperSet.IsEmpty)
+        {
+            upperSet.CopyTo(combined.Slice(pos, upperSet.Length));
+            pos += upperSet.Length;
+        }
+
+        if (!numberSet.IsEmpty)
+        {
+            numberSet.CopyTo(combined.Slice(pos, numberSet.Length));
+            pos += numberSet.Length;
+        }
+
+        if (!specialSet.IsEmpty)
+        {
+            specialSet.CopyTo(combined.Slice(pos, specialSet.Length));
+        }
+
+        // It all points to a static singleton, doesn't need disposal
+        var rng = RandomNumberGenerator.Create();
 
         // Fill remainder from combined
-        FillWithSecureCharacters(result.AsSpan(written), combined, rng);
+        FillWithSecureCharacters(destination[written..], combined, rng);
+
+        combined.SecureZero();
 
         // Step 3: shuffle
-        SecureShuffle(result.AsSpan(), rng);
-
-        return new string(result);
+        destination.SecureShuffle();
     }
 
     /// <summary>
@@ -168,7 +281,7 @@ public static class PasswordUtil
         if (charCount <= 256)
         {
             int maxAcceptable = 256 / charCount * charCount; // rejection-sampling boundary
-            Span<byte> buffer = stackalloc byte[64];
+            Span<byte> buffer = stackalloc byte[_rngByteBufferSize];
 
             var written = 0;
             while (written < destination.Length)
@@ -178,48 +291,41 @@ public static class PasswordUtil
                 for (var i = 0; i < buffer.Length && written < destination.Length; i++)
                 {
                     byte b = buffer[i];
+
                     if (b < maxAcceptable)
                         destination[written++] = characters[b % charCount];
                 }
             }
 
-            CryptographicOperations.ZeroMemory(buffer);
+            buffer.SecureZero();
             return;
         }
 
         // General path for large alphabets (> 256)
         for (var i = 0; i < destination.Length; i++)
-            destination[i] = characters[GetInt32(rng, charCount)];
+            destination[i] = characters[RandomNumberGenerator.GetInt32(charCount)];
     }
 
-    /// <summary>In-place, cryptographically secure Fisher–Yates shuffle.</summary>
-    private static void SecureShuffle<T>(Span<T> span, RandomNumberGenerator rng)
-    {
-        for (int i = span.Length - 1; i > 0; i--)
-        {
-            int j = GetInt32(rng, i + 1);
-            (span[i], span[j]) = (span[j], span[i]);
-        }
-    }
-
-    // Use the instance RNG rather than the static API for consistency & testability.
+    /// <summary>
+    /// Returns either the original span or a filtered span in <paramref name="buffer"/> with ambiguous characters removed,
+    /// without allocating a new string.
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int GetInt32(RandomNumberGenerator rng, int exclusiveMax)
+    private static ReadOnlySpan<char> GetFilteredSet(ReadOnlySpan<char> source, bool excludeAmbiguous, Span<char> buffer)
     {
-        // Equivalent to RandomNumberGenerator.GetInt32(exclusiveMax), but bound to the provided instance.
-        if (exclusiveMax <= 0)
-            throw new ArgumentOutOfRangeException(nameof(exclusiveMax));
+        if (!excludeAmbiguous)
+            return source;
 
-        // Use 32-bit rejection sampling
-        Span<byte> bytes = stackalloc byte[4];
-        uint limit = uint.MaxValue / (uint)exclusiveMax * (uint)exclusiveMax;
-        uint value;
-        do
+        var written = 0;
+
+        for (var i = 0; i < source.Length; i++)
         {
-            rng.GetBytes(bytes);
-            value = BitConverter.ToUInt32(bytes);
-        } while (value >= limit);
+            char c = source[i];
 
-        return (int)(value % (uint)exclusiveMax);
+            if (!_ambiguousMap[c])
+                buffer[written++] = c;
+        }
+
+        return buffer[..written];
     }
 }
