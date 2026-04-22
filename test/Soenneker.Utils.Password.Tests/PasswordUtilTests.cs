@@ -3,7 +3,6 @@ using Soenneker.Tests.Unit;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Xunit;
 
 namespace Soenneker.Utils.Password.Tests;
 
@@ -11,11 +10,11 @@ public class PasswordUtilTests : UnitTest
 {
     private const string AllowedChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
 
-    public PasswordUtilTests(ITestOutputHelper output) : base(output)
+    public PasswordUtilTests( output) : base(output)
     {
     }
 
-    [Fact]
+    [Test]
     public void GetUriSafePassword_should_return_string_of_same_length()
     {
         string result = PasswordUtil.GetUriSafePasswordString(20);
@@ -24,7 +23,7 @@ public class PasswordUtilTests : UnitTest
         result.Length.Should().Be(20);
     }
 
-    [Fact]
+    [Test]
     public void GetPassword_should_return_password_with_default_length()
     {
         string result = PasswordUtil.GetPasswordString();
@@ -32,7 +31,7 @@ public class PasswordUtilTests : UnitTest
         result.Length.Should().Be(24);
     }
 
-    [Fact]
+    [Test]
     public void GetPassword_with_ambiguous_should_give_expected_length()
     {
         string result = PasswordUtil.GetPasswordString(excludeAmbiguous: true);
@@ -40,7 +39,7 @@ public class PasswordUtilTests : UnitTest
         result.Length.Should().Be(24);
     }
 
-    [Fact]
+    [Test]
     public void GetUriSafePassword_should_not_be_null()
     {
         string result = PasswordUtil.GetUriSafePasswordString(excludeAmbiguous: true);
@@ -48,7 +47,7 @@ public class PasswordUtilTests : UnitTest
         result.Length.Should().Be(24);
     }
 
-    [Fact]
+    [Test]
     public void GetUriSafePassword_should_generate_expected_length()
     {
         string password = PasswordUtil.GetUriSafePasswordString(32);
@@ -57,7 +56,7 @@ public class PasswordUtilTests : UnitTest
         password.All(c => char.IsLetterOrDigit(c)).Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void GetUriSafePassword_should_exclude_ambiguous_when_requested()
     {
         string password = PasswordUtil.GetUriSafePasswordString(64, excludeAmbiguous: true);
@@ -81,21 +80,21 @@ public class PasswordUtilTests : UnitTest
         if (special) password.Any(c => "!@#$%^*()[]{},.:~_-=".Contains(c)).Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void GetPassword_should_throw_if_all_sets_disabled()
     {
         Action act = () => PasswordUtil.GetPasswordString(10, false, false, false, false);
         act.Should().Throw<ArgumentException>().WithMessage("*At least one character type*");
     }
 
-    [Fact]
+    [Test]
     public void GetPassword_should_throw_if_too_short_for_sets()
     {
         Action act = () => PasswordUtil.GetPasswordString(2, true, true, true, false);
         act.Should().Throw<ArgumentException>().WithMessage("Password length must be at least the number of selected character types to guarantee inclusion.");
     }
 
-    [Fact]
+    [Test]
     public void GetSecureCharacters_should_generate_expected_length()
     {
         var chars = "ABC123";
@@ -104,21 +103,21 @@ public class PasswordUtilTests : UnitTest
         result.All(c => chars.Contains(c)).Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void GetSecureCharacters_should_throw_on_empty_charset()
     {
         Action act = () => PasswordUtil.GetSecureCharacters(10, "");
         act.Should().Throw<ArgumentException>().WithMessage("*must not be empty*");
     }
 
-    [Fact]
+    [Test]
     public void GetPassword_should_exclude_ambiguous_when_requested()
     {
         string password = PasswordUtil.GetPasswordString(64, includeLowers: true, includeUppers: true, includeNumbers: true, includeSpecials: false, excludeAmbiguous: true);
         password.Should().NotContainAny("Il1O0S5Z2B8G6gqCG");
     }
 
-    [Fact]
+    [Test]
     public void Generated_passwords_should_be_random()
     {
         List<string> passwords = Enumerable.Range(0, 10)
@@ -153,7 +152,7 @@ public class PasswordUtilTests : UnitTest
         password.Length.Should().Be(length);
     }
 
-    [Fact]
+    [Test]
     public void GetSecureCharacters_should_produce_nonidentical_outputs_on_repeated_calls()
     {
         string one = PasswordUtil.GetSecureCharacters(2048, AllowedChars);
