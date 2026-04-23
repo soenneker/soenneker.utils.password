@@ -10,7 +10,7 @@ public class PasswordUtilTests : UnitTest
 {
     private const string AllowedChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
 
-    public PasswordUtilTests( output) : base(output)
+    public PasswordUtilTests() : base()
     {
     }
 
@@ -64,11 +64,11 @@ public class PasswordUtilTests : UnitTest
         password.Should().NotContainAny("Il1O0S5Z2B8G6gqCG");
     }
 
-    [Theory]
-    [InlineData(10, true, false, false, false)]
-    [InlineData(10, false, true, false, false)]
-    [InlineData(10, false, false, true, false)]
-    [InlineData(10, false, false, false, true)]
+    [Test]
+    [Arguments(10, true, false, false, false)]
+    [Arguments(10, false, true, false, false)]
+    [Arguments(10, false, false, true, false)]
+    [Arguments(10, false, false, false, true)]
     public void GetPassword_should_include_required_char_types(int length, bool lower, bool upper, bool number, bool special)
     {
         string password = PasswordUtil.GetPasswordString(length, lower, upper, number, special);
@@ -127,10 +127,10 @@ public class PasswordUtilTests : UnitTest
         passwords.Distinct().Count().Should().BeGreaterThan(1);
     }
 
-    [Theory]
-    [InlineData(256)]
-    [InlineData(2048)]
-    [InlineData(10000)]
+    [Test]
+    [Arguments(256)]
+    [Arguments(2048)]
+    [Arguments(10000)]
     public void GetSecureCharacters_should_generate_long_valid_string(int length)
     {
         string result = PasswordUtil.GetSecureCharacters(length, AllowedChars);
@@ -140,10 +140,10 @@ public class PasswordUtilTests : UnitTest
         result.All(c => AllowedChars.Contains(c)).Should().BeTrue();
     }
 
-    [Theory]
-    [InlineData(512)]
-    [InlineData(2048)]
-    [InlineData(8192)]
+    [Test]
+    [Arguments(512)]
+    [Arguments(2048)]
+    [Arguments(8192)]
     public void GetPassword_should_generate_random_password_of_correct_length(int length)
     {
         string password = PasswordUtil.GetPasswordString(length, includeLowers: true, includeUppers: true, includeNumbers: true, includeSpecials: true, excludeAmbiguous: true);
