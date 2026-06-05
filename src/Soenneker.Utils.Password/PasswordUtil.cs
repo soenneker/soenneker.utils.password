@@ -97,6 +97,11 @@ public static class PasswordUtil
         return GetPasswordString(length, true, true, true, false, excludeAmbiguous);
     }
 
+    /// <summary>
+    /// Gets uri safe password.
+    /// </summary>
+    /// <param name="destination">The destination.</param>
+    /// <param name="excludeAmbiguous">The exclude ambiguous.</param>
     public static void GetUriSafePassword(Span<char> destination, bool excludeAmbiguous = false)
     {
         GetPassword(destination, true, true, true, false, excludeAmbiguous);
