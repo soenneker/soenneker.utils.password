@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Diagnostics.Contracts;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -19,23 +20,10 @@ public static class PasswordUtil
     private static ReadOnlySpan<char> SpecialJsonSafe => "!@#$%^*()[]{},.:~_-=";
     private static ReadOnlySpan<char> AmbiguousChars => "Il1O0S5Z2B8G6gqCG";
 
-    // Cache an ambiguity lookup once, rather than rebuilding per call.
-    private static readonly bool[] _ambiguousMap = BuildAmbiguousMap();
+    private static readonly SearchValues<char> _ambiguousChars = SearchValues.Create(AmbiguousChars);
 
     private const int _stackAllocLength = 256;
     private const int _rngByteBufferSize = 128;
-
-    private static bool[] BuildAmbiguousMap()
-    {
-        var map = new bool[char.MaxValue + 1];
-
-        foreach (char c in AmbiguousChars)
-        {
-            map[c] = true;
-        }
-
-        return map;
-    }
 
     /// <summary>Generates a secure random string using the specified character set.</summary>
     [Pure]
@@ -327,7 +315,7 @@ public static class PasswordUtil
         {
             char c = source[i];
 
-            if (!_ambiguousMap[c])
+            if (!_ambiguousChars.Contains(c))
                 buffer[written++] = c;
         }
 
