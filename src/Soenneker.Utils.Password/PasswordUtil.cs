@@ -26,6 +26,7 @@ public static class PasswordUtil
     private const int _rngByteBufferSize = 128;
 
     /// <summary>Generates a secure random string using the specified character set.</summary>
+    /// <returns>Generates a secure random string using the specified character set.</returns>
     [Pure]
     public static string GetSecureCharacters(int length, string characters)
     {
@@ -40,6 +41,7 @@ public static class PasswordUtil
     /// This allocates a managed <see cref="string"/>, which cannot be securely cleared.
     /// For sensitive secrets (passwords, keys), prefer <see cref="GetPassword"/> with a caller-owned <see cref="Span{Char}"/>.
     /// </remarks>
+    /// <returns>Generates a secure random string using the specified character set.</returns>
     [Pure]
     public static string GetSecureCharacters(int length, string characters, RandomNumberGenerator generator)
     {
@@ -53,6 +55,7 @@ public static class PasswordUtil
     /// This allocates a managed <see cref="string"/>, which cannot be securely cleared.
     /// For sensitive secrets (passwords, keys), prefer <see cref="GetPassword"/> with a caller-owned <see cref="Span{Char}"/>.
     /// </remarks>
+    /// <returns>Generates a secure random string using the specified character set.</returns>
     [Pure]
     public static string GetSecureCharacters(int length, ReadOnlySpan<char> characters, RandomNumberGenerator generator)
     {
@@ -79,6 +82,7 @@ public static class PasswordUtil
 
     /// <summary>Generates a secure, URI-safe password using alphanumeric characters.</summary>
     /// <remarks>You should use GetUriSafePassword() if possible</remarks>
+    /// <returns>Generates a secure, URI-safe password using alphanumeric characters.</returns>
     [Pure]
     public static string GetUriSafePasswordString(int length = 24, bool excludeAmbiguous = false)
     {
@@ -86,10 +90,10 @@ public static class PasswordUtil
     }
 
     /// <summary>
-    /// Gets uri safe password.
+    /// Fills a character buffer with a cryptographically random password limited to URI-safe characters.
     /// </summary>
-    /// <param name="destination">The destination.</param>
-    /// <param name="excludeAmbiguous">The exclude ambiguous.</param>
+    /// <param name="destination">The buffer receiving the password.</param>
+    /// <param name="excludeAmbiguous">True to omit visually ambiguous characters.</param>
     public static void GetUriSafePassword(Span<char> destination, bool excludeAmbiguous = false)
     {
         GetPassword(destination, true, true, true, false, excludeAmbiguous);
@@ -100,6 +104,7 @@ public static class PasswordUtil
     /// Guarantees inclusion of at least one character from each selected set, then shuffles.
     /// </summary>
     /// <remarks>You should use GetPassword() if possible</remarks>
+    /// <returns>Generates a secure password using a combination of character sets. Guarantees inclusion of at least one character from each selected set, then shuffles.</returns>
     [Pure]
     public static string GetPasswordString(int length = 24, bool includeLowers = true, bool includeUppers = true, bool includeNumbers = true,
         bool includeSpecials = true, bool excludeAmbiguous = false)
