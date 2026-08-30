@@ -246,8 +246,7 @@ public static class PasswordUtil
             specialSet.CopyTo(combined.Slice(pos, specialSet.Length));
         }
 
-        // It all points to a static singleton, doesn't need disposal
-        var rng = RandomNumberGenerator.Create();
+        using RandomNumberGenerator rng = RandomNumberGenerator.Create();
 
         // Fill remainder from combined
         FillWithSecureCharacters(destination[written..], combined, rng);
