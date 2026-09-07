@@ -68,16 +68,8 @@ public static class PasswordUtil
         if (length > 1_000_000)
             throw new ArgumentOutOfRangeException(nameof(length), "Requested length is unreasonably large.");
 
-        Span<char> buffer = length <= _stackAllocLength ? stackalloc char[length] : new char[length];
-
-        FillWithSecureCharacters(buffer, characters, generator);
-
-        var result = new string(buffer);
-
-        if (length > _stackAllocLength)
-            buffer.SecureZero();
-
-        return result;
+        return string.Create(length, new SecureCharacterState(characters, generator), static (destination, state) =>
+            FillWithSecureCharacters(destination, state.Characters, state.Generator));
     }
 
     /// <summary>Generates a secure, URI-safe password using alphanumeric characters.</summary>
@@ -109,6 +101,13 @@ public static class PasswordUtil
     public static string GetPasswordString(int length = 24, bool includeLowers = true, bool includeUppers = true, bool includeNumbers = true,
         bool includeSpecials = true, bool excludeAmbiguous = false)
     {
+        if (length > _stackAllocLength)
+        {
+            return string.Create(length, (includeLowers, includeUppers, includeNumbers, includeSpecials, excludeAmbiguous),
+                static (destination, state) => GetPassword(destination, state.includeLowers, state.includeUppers, state.includeNumbers,
+                    state.includeSpecials, state.excludeAmbiguous));
+        }
+
         Span<char> buffer = length <= _stackAllocLength ? stackalloc char[length] : new char[length];
 
         GetPassword(buffer, includeLowers, includeUppers, includeNumbers, includeSpecials, excludeAmbiguous);
@@ -325,4 +324,11 @@ public static class PasswordUtil
 
         return buffer[..written];
     }
+
+    private readonly ref struct SecureCharacterState(ReadOnlySpan<char> characters, RandomNumberGenerator generator)
+    {
+        public ReadOnlySpan<char> Characters { get; } = characters;
+        public RandomNumberGenerator Generator { get; } = generator;
+    }
+
 }
